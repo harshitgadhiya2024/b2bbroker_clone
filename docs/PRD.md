@@ -1,6 +1,6 @@
 # PRD: Comprehensive PRD, Website Audit & Clone Implementation Plan for B2Broker Website
 
-**Document Version:** 1.0
+**Document Version:** 1.1
 **Date:** July 2, 2026
 **Author:** Petra, AI Product Manager — AI Employee OS
 **Website Under Analysis:** https://b2broker.com/
@@ -14,7 +14,7 @@
 
 B2Broker is a global Prime of Prime (PoP) liquidity and technology provider serving forex brokers, crypto exchanges, banks, hedge funds, and payment providers. The website acts as the company's primary commercial hub — combining corporate marketing, product catalogs, lead generation, educational content, and partner onboarding into a single, high-performance web property.
 
-The site is built on **Next.js** and follows a modern SaaS-style architecture: static marketing pages rendered server-side for SEO, dynamic product configurators, a CMS-driven blog/resource library, multi-language support, and conversion-optimized funnels that route prospects into sales pipelines via "Book a Demo" and contact forms.
+The clone will use **Next.js** purely as a frontend framework (SSR/SSG/ISR for SEO and performance) and **FastAPI (Python)** as the dedicated backend API server. This separation keeps the frontend lightweight and focused on rendering while the backend handles all business logic, form processing, CRM integration, and data orchestration. A headless CMS (Strapi) manages editorial content independently.
 
 ### 1.2 Scope of the Clone Project
 
@@ -64,7 +64,7 @@ This PRD defines the full requirements for building a **production-ready clone**
 
 | Layer | Technology | Justification |
 |---|---|---|
-| Framework | **Next.js 14+ (App Router)** | The original site uses Next.js. Preserves SSR/SSG capabilities, ISR for blog content, excellent SEO support via metadata API, and React Server Components for performance. Direct architectural parity with the original. |
+| Framework | **Next.js 14+ (App Router)** | Used strictly as a frontend/rendering framework. Preserves SSR/SSG capabilities, ISR for blog content, excellent SEO support via metadata API, and React Server Components for performance. No API routes or backend logic lives here. |
 | Language | **TypeScript** | Type safety across a large component library reduces defects, improves maintainability, and enables better IDE tooling for the team. |
 | Styling | **Tailwind CSS + CSS Modules** | Utility-first approach accelerates responsive development. CSS Modules handle component-scoped custom animations. Matches the dense, utility-driven styling patterns visible on the original site. |
 | Animation | **Framer Motion** | Handles the scroll-triggered reveals, section transitions, and interactive hover states present throughout the B2Broker site. |
@@ -77,41 +77,80 @@ This PRD defines the full requirements for building a **production-ready clone**
 
 | Layer | Technology | Justification |
 |---|---|---|
-| API / Server | **Next.js API Routes + Route Handlers** | Co-located with the frontend, simplifies deployment. Handles form submissions, newsletter signups, and internal API needs without a separate server. |
-| CMS | **Strapi v5 (Headless)** | Open-source headless CMS provides the admin panel, content modeling, media management, role-based access, and i18n plugin for multi-language. Self-hosted for data control. Alternatives: Payload CMS if tighter Next.js integration is preferred. |
-| Language | **Node.js / TypeScript** | Unified language across frontend and backend reduces context switching. |
-| Email Service | **Resend or SendGrid** | Transactional emails for form confirmations, demo booking receipts. SendGrid if marketing automation (drip campaigns) is needed. |
-| Search | **Meilisearch** | Fast, typo-tolerant full-text search for blog articles, products, and resources. Lightweight self-hosted alternative to Algolia. |
+| API / Server | **FastAPI** | Dedicated Python backend, fully decoupled from the Next.js frontend. Handles form submissions, newsletter signups, demo booking orchestration, CRM webhook dispatch, email triggers, and any custom business logic. Provides auto-generated OpenAPI docs (`/docs`) for frontend integration. |
+| Language | **Python 3.12+** | Mature ecosystem for API development, data processing, and third-party service integrations. Strong library support for CRM SDKs, email services, and search indexing. |
+| Validation | **Pydantic v2** | Schema-based request/response validation with automatic serialization, tightly integrated with FastAPI. |
+| ASGI Server | **Uvicorn + Gunicorn** | Uvicorn as the ASGI worker for async performance; Gunicorn as the process manager for production deployments. |
+| ORM / DB Access | **SQLAlchemy 2.0 + Alembic** | Async-capable ORM for PostgreSQL access. Alembic handles database migrations. |
+| CMS | **Strapi v5 (Headless)** | Open-source headless CMS provides the admin panel, content modeling, media management, role-based access, and i18n plugin for multi-language. Self-hosted for data control. The Next.js frontend fetches content from Strapi directly; FastAPI handles non-content business logic. Alternatives: Payload CMS if tighter Next.js integration is preferred. |
+| Email Service | **Resend (via Python SDK) or SendGrid** | Transactional emails for form confirmations, demo booking receipts. SendGrid if marketing automation (drip campaigns) is needed. Both provide Python client libraries. |
+| Search | **Meilisearch** | Fast, typo-tolerant full-text search for blog articles, products, and resources. FastAPI manages index synchronization and exposes search endpoints to the frontend. Lightweight self-hosted alternative to Algolia. |
+| Task Queue (optional) | **Celery + Redis** | For async background tasks such as CRM sync, email dispatch, and search re-indexing. Only needed if synchronous processing introduces latency. |
 
 ### 2.3 Database
 
 | Layer | Technology | Justification |
 |---|---|---|
-| Primary Database | **PostgreSQL 16** | Battle-tested relational DB. Strapi's recommended database. Handles structured content, user accounts, leads, and relational product data. |
-| Cache | **Redis** | Session storage, API response caching, rate limiting. |
+| Primary Database | **PostgreSQL 16** | Battle-tested relational DB. Used by both Strapi (content) and FastAPI (leads, form submissions, application data). Handles structured content, user accounts, leads, and relational product data. |
+| Cache | **Redis** | Session storage, API response caching, rate limiting, and Celery broker if task queue is adopted. |
 | File/Media Storage | **AWS S3 or Cloudflare R2** | Stores uploaded media, downloadable PDFs, and video thumbnails. R2 preferred for zero-egress cost. |
 
 ### 2.4 Infrastructure & DevOps
 
 | Layer | Technology | Justification |
 |---|---|---|
-| Hosting (Frontend) | **Vercel** | Native Next.js hosting with edge functions, ISR, preview deployments, and built-in analytics. Zero-config deployment. |
-| Hosting (CMS) | **AWS EC2 / Railway / Render** | Strapi runs as a standalone Node.js service. Railway or Render for simplicity; EC2 for full control. |
+| Hosting (Frontend) | **Vercel** | Native Next.js hosting with edge functions, ISR, preview deployments, and built-in analytics. Zero-config deployment. Next.js runs here as a pure frontend — no API routes. |
+| Hosting (Backend API) | **AWS EC2 / Railway / Render** | FastAPI runs as a containerized Python service (Docker + Uvicorn/Gunicorn). Railway or Render for simplicity; EC2 for full control. |
+| Hosting (CMS) | **AWS EC2 / Railway / Render** | Strapi runs as a standalone Node.js service, separate from both the frontend and the FastAPI backend. |
 | CDN | **Vercel Edge Network or Cloudflare** | Global CDN for static assets, images, and cached pages. |
-| CI/CD | **GitHub Actions** | Automated lint, test, build, deploy pipeline. Preview deployments on PRs via Vercel. |
-| Monitoring | **Sentry (errors) + Vercel Analytics (performance)** | Error tracking and Core Web Vitals monitoring. |
-| Container | **Docker** | Containerized Strapi and PostgreSQL for consistent dev/staging/prod environments. |
+| CI/CD | **GitHub Actions** | Automated lint, test, build, deploy pipeline. Preview deployments on PRs via Vercel (frontend). Separate pipelines for FastAPI and Strapi containers. |
+| Monitoring | **Sentry (errors) + Vercel Analytics (performance)** | Error tracking across both frontend (JS) and backend (Python). Core Web Vitals monitoring via Vercel. |
+| Container | **Docker + Docker Compose** | Containerized FastAPI, Strapi, PostgreSQL, Redis, and Meilisearch for consistent dev/staging/prod environments. |
 
 ### 2.5 Third-Party Services
 
 | Service | Purpose |
 |---|---|
 | **Google Analytics 4 + GTM** | User tracking, conversion tracking, event analytics |
-| **HubSpot or Salesforce** | CRM integration for lead routing from demo booking and contact forms |
-| **Calendly or Cal.com** | Demo booking scheduling (embedded or API) |
+| **HubSpot or Salesforce** | CRM integration for lead routing from demo booking and contact forms (FastAPI dispatches leads via CRM API/SDK) |
+| **Calendly or Cal.com** | Demo booking scheduling (embedded on frontend or API-integrated via FastAPI) |
 | **Cookiebot or OneTrust** | GDPR/cookie consent management |
 | **Cloudinary** (optional) | Image optimization and transformation CDN |
-| **Recaptcha v3 or Turnstile** | Bot protection on all public forms |
+| **Recaptcha v3 or Turnstile** | Bot protection on all public forms (token verified server-side by FastAPI) |
+
+### 2.6 Architecture Diagram (Logical)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                      End Users / Browsers               │
+└────────────────────────┬────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────┐
+│              Vercel (Next.js Frontend)                   │
+│  SSR / SSG / ISR — rendering only, no business logic    │
+│  Fetches content from Strapi, calls FastAPI for actions  │
+└──────────┬──────────────────────────┬───────────────────┘
+           │                          │
+           ▼                          ▼
+┌─────────────────────┐   ┌─────────────────────────────┐
+│   Strapi v5 (CMS)   │   │   FastAPI (Backend API)     │
+│   Content CRUD,      │   │   Form handling, CRM sync,  │
+│   Media, i18n        │   │   Email, Search, Auth,      │
+│   Admin Panel        │   │   Webhooks, Business Logic  │
+└──────────┬──────────┘   └──────────┬──────────────────┘
+           │                          │
+           ▼                          ▼
+┌─────────────────────────────────────────────────────────┐
+│                    PostgreSQL 16                         │
+│         (Strapi DB + Application DB schemas)            │
+└─────────────────────────────────────────────────────────┘
+           │
+     ┌─────┴─────┐
+     ▼           ▼
+  Redis      Meilisearch      S3 / R2
+ (Cache)     (Search Index)   (Media)
+```
 
 ---
 
@@ -206,46 +245,3 @@ The following sitemap is derived from the analyzed pages, navigation links, and 
 | 44 | `/blog/[slug]/` | Individual Blog Article | Article body (rich text), author card, related articles, social share, TOC sidebar | Dynamic (CMS) |
 | 45 | `/library/` | Resource Library — Guides, whitepapers, videos | Resource cards with type filters (video, PDF, guide), download gating | Dynamic (CMS) |
 | 46 | `/library/[slug]/` | Individual Resource Page | Resource detail, download/view CTA, related resources | Dynamic (CMS) |
-
-#### 3.1.9 Utility Pages
-
-| # | URL Path | Purpose | Key Components | Static/Dynamic |
-|---|---|---|---|---|
-| 47 | `/search/` | Site-wide Search Results | Search bar, filtered results | Dynamic |
-| 48 | `/book-a-demo/` | Demo Booking Landing Page | Multi-step form or Calendly embed | Dynamic |
-| 49 | `/sitemap.xml` | XML Sitemap | Auto-generated | Dynamic |
-| 50 | `/404` | Not Found Page | Error message, navigation links | Static |
-
-### 3.2 Page Count Summary
-
-| Category | Count |
-|---|---|
-| Corporate / Company | 7 |
-| Legal | 5 |
-| Liquidity Products | 11 |
-| Turnkey Solutions | 5 |
-| Individual Products | 4 |
-| White Label | 3 |
-| Services | 3 |
-| Sectors | 4 |
-| Blog & Resources | 4 (templates) |
-| Utility | 4 |
-| **Total Unique Templates** | **~50** |
-| **Total Rendered Pages (incl. blog/resource entries)** | **300+** |
-
----
-
-## 4. Frontend Components Inventory
-
-### 4.1 Global / Layout Components
-
-| Component | Description | Used On |
-|---|---|---|
-| `MegaMenuNavbar` | Multi-tier mega menu with product dropdowns, category columns, CTAs within dropdown panels. Sticky on scroll. Mobile hamburger variant with accordion sub-menus. | All pages |
-| `Footer` | Multi-column footer with navigation links, legal links, social icons, newsletter signup, office addresses, regulatory disclaimers | All pages |
-| `TopBar` | Slim top bar with language selector, contact phone, social links | All pages |
-| `CookieConsentBanner` | GDPR-compliant cookie consent with accept/reject/customize | All pages (overlay) |
-| `MobileDrawer` | Full-screen mobile navigation with nested accordion menus | All pages (mobile) |
-| `LanguageSwitcher` | Dropdown or modal for selecting site language | Navbar / TopBar |
-| `Breadcrumbs` | Hierarchical breadcrumb trail | Product, blog, and inner pages |
-| `Scroll
